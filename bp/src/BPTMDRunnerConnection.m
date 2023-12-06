@@ -55,6 +55,8 @@
 @property (nonatomic, assign) pid_t appProcessPID;
 @property (nonatomic, nullable) NSTask *recordVideoTask;
 @property (nonatomic, nullable) NSString *videoFileName;
+@property (nonatomic, nullable) NSTask *recordAppLogsTask;
+@property (nonatomic, nullable) NSString *appLogsFileName;
 
 
 
@@ -94,6 +96,7 @@
         [connection registerDisconnectHandler:^{
             // This is called when the task is abruptly terminated (e.g. if the test times out)
             [self stopVideoRecording:YES];
+            [self stopAppLogsRecording:YES];
             [BPUtils printInfo:INFO withString:@"DTXConnection disconnected."];
             self.disconnected = YES;
         }];
@@ -224,6 +227,72 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
     self.recordVideoTask = nil;
 }
 
+#pragma mark - App Logs Recording
+
+static inline NSString *getAppLogPath(NSString *directory, NSString *testClass, NSString *method, NSInteger attemptNumber)
+{
+    return [NSString stringWithFormat:@"%@/%@__%@__%ld.log", directory, testClass, method, (long)attemptNumber];
+}
+
+- (void)startAppLogsRecording
+{
+    NSString *appLogsFileName = getAppLogPath(self.context.config.outputDirectory, @"tmp_test_class", [self.simulator UDID], self.context.attemptNumber);
+    [self stopAppLogsRecording:YES];
+    NSString *command = [NSString stringWithFormat:@"xcrun simctl spawn %@ log stream --level=debug --predicate 'processImagePath contains \"PinterestDevelopmentEG2\"' > %@", [self.simulator UDID], appLogsFileName];
+    NSTask *task = [BPUtils buildShellTaskForCommand:command];
+    self.recordAppLogsTask = task;
+    self.appLogsFileName = appLogsFileName;
+    [task launch];
+    [BPUtils printInfo:INFO withString:@"Started recording app logs to %@", appLogsFileName];
+    [BPUtils printInfo:DEBUGINFO withString:@"Started recording app logs task with pid %d and command: %@",  [task processIdentifier], [BPUtils getCommandStringForTask:task]];
+}
+
+- (void)tagAppLogsRecordingWithTestClass:(NSString *)testClass method:(NSString *)method
+{
+    NSString *newAppLogsFileName = getAppLogPath(self.context.config.outputDirectory, testClass, method, self.context.attemptNumber);
+    NSError *moveError = nil;
+    BOOL success = [NSFileManager.defaultManager moveItemAtPath:self.appLogsFileName toPath:newAppLogsFileName error:&moveError];
+    if (moveError != nil || !success) {
+        [BPUtils printInfo:WARNING withString:@"Failed to move app logs from %@ to %@", self.appLogsFileName, newAppLogsFileName];
+    } else {
+        [BPUtils printInfo:INFO withString:@"Saved app logs at: %@", newAppLogsFileName];
+    }
+}
+
+- (void)stopAppLogsRecording:(BOOL)forced
+{
+    NSTask *task = self.recordAppLogsTask;
+    if (task == nil) {
+        if (!forced) {
+            [BPUtils printInfo:ERROR withString: @"Tried to end app logs recording task normally, but there was no task."];
+        }
+        return;
+    }
+    
+    if (forced) {
+        [BPUtils printInfo:ERROR withString: @"Found dangling app logs recording task. Stopping it."];
+    }
+    
+    if (![task isRunning]) {
+        [BPUtils printInfo:ERROR withString:@"App logs task exists but it was already terminated with status %d", [task terminationStatus]];
+    }
+    
+    [BPUtils printInfo:INFO withString:@"Stopping recording app logs."];
+    [BPUtils printInfo:DEBUGINFO withString:@"Stopping app logs recording task with pid %d and command: %@", [task processIdentifier], [BPUtils getCommandStringForTask:task]];
+    [task interrupt];
+    [task waitUntilExit];
+    
+    if ([task terminationStatus] != 0) {
+        [BPUtils printInfo:ERROR withString:@"App logs task was interrupted, but exited with non-zero status %d", [task terminationStatus]];
+    }
+    
+    NSString *filePath = [[task arguments].lastObject componentsSeparatedByString:@" "].lastObject;
+    if (![[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
+        [BPUtils printInfo:ERROR withString:@"App logs recording file missing, expected at path %@!", filePath];
+    }
+    self.recordAppLogsTask = nil;
+}
+
 
 #pragma mark - XCTMessagingChannel_RunnerToIDE
 #pragma mark XCTMessagingRole_DebugLogging
@@ -338,6 +407,9 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
         }
         [self startVideoRecording];
     }
+    [self stopAppLogsRecording:NO];
+    [self tagAppLogsRecordingWithTestClass:testClass method:method];
+    [self startAppLogsRecording];
     return nil;
 }
 
@@ -360,6 +432,7 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
     if ([self shouldRecordVideo]) {
         [self startVideoRecording];
     }
+    [self startAppLogsRecording];
     return nil;
 }
 
@@ -369,6 +442,7 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
     if ([self shouldRecordVideo]) {
         [self stopVideoRecording:YES];
     }
+    [self stopAppLogsRecording:YES];
     return nil;
 }
 
