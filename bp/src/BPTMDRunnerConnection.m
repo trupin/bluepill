@@ -170,7 +170,7 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
 
 - (void)startVideoRecording
 {
-    NSString *videoFileName = getVideoPath(self.context.config.videosDirectory, @"tmp_test_class", [self.simulator UDID], self.context.attemptNumber);
+    NSString *videoFileName = getVideoPath(@"/tmp", @"tmp_test_class", [self.simulator UDID], self.context.attemptNumber);
     [self stopVideoRecording:YES];
     NSString *command = [NSString stringWithFormat:@"xcrun simctl io %@ recordVideo --force %@", [self.simulator UDID], videoFileName];
     NSTask *task = [BPUtils buildShellTaskForCommand:command];
@@ -236,7 +236,7 @@ static inline NSString *getAppLogPath(NSString *directory, NSString *testClass, 
 
 - (void)startAppLogsRecording
 {
-    NSString *appLogsFileName = getAppLogPath(self.context.config.outputDirectory, @"tmp_test_class", [self.simulator UDID], self.context.attemptNumber);
+    NSString *appLogsFileName = getAppLogPath(@"/tmp", @"tmp_test_class", [self.simulator UDID], self.context.attemptNumber);
     [self stopAppLogsRecording:YES];
     NSString *command = [NSString stringWithFormat:@"xcrun simctl spawn %@ log stream --level=debug --predicate 'processImagePath contains \"PinterestDevelopmentEG2\"' > %@", [self.simulator UDID], appLogsFileName];
     NSTask *task = [BPUtils buildShellTaskForCommand:command];
