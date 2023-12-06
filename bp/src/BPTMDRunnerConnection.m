@@ -231,7 +231,7 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
 
 static inline NSString *getAppLogPath(NSString *directory, NSString *testClass, NSString *method, NSInteger attemptNumber)
 {
-    return [NSString stringWithFormat:@"%@/%@__%@__%ld.log", directory, testClass, method, (long)attemptNumber];
+    return [NSString stringWithFormat:@"%@/%@__%@__%ld_system.log", directory, testClass, method, (long)attemptNumber];
 }
 
 - (void)startAppLogsRecording
