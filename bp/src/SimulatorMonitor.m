@@ -75,6 +75,8 @@
 }
 
 - (void)onTestCaseBeganWithName:(NSString *)testName inClass:(NSString *)testClass {
+    [BPUtils printInfo:DEBUGINFO withString:@"SimulatorMonitor: onTestCaseBeganWithName: %@, inClass: %@", testName, testClass];
+    
     [[BPStats sharedStats] startTimer:[NSString stringWithFormat:TEST_CASE_FORMAT, [BPStats sharedStats].attemptNumber, testClass, testName]];
     self.lastTestCaseStartDate = [NSDate date];
     self.testsState = Running;

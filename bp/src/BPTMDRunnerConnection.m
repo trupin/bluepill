@@ -165,10 +165,10 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
     return self.context.config.videosDirectory.length > 0;
 }
 
-- (void)startVideoRecordingForTestClass:(NSString *)testClass method:(NSString *)method
+- (void)startVideoRecording
 {
+    NSString *videoFileName = getVideoPath(self.context.config.videosDirectory, @"tmp_test_class", [self.simulator UDID], self.context.attemptNumber);
     [self stopVideoRecording:YES];
-    NSString *videoFileName = getVideoPath(self.context.config.videosDirectory, testClass, method, self.context.attemptNumber);
     NSString *command = [NSString stringWithFormat:@"xcrun simctl io %@ recordVideo --force %@", [self.simulator UDID], videoFileName];
     NSTask *task = [BPUtils buildShellTaskForCommand:command];
     self.recordVideoTask = task;
@@ -176,6 +176,18 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
     [task launch];
     [BPUtils printInfo:INFO withString:@"Started recording video to %@", videoFileName];
     [BPUtils printInfo:DEBUGINFO withString:@"Started recording video task with pid %d and command: %@",  [task processIdentifier], [BPUtils getCommandStringForTask:task]];
+}
+
+- (void)tagVideoRecordingWithTestClass:(NSString *)testClass method:(NSString *)method
+{
+    NSString *newVideoFileName = getVideoPath(self.context.config.videosDirectory, testClass, method, self.context.attemptNumber);
+    NSError *moveError = nil;
+    BOOL success = [NSFileManager.defaultManager moveItemAtPath:self.videoFileName toPath:newVideoFileName error:&moveError];
+    if (moveError != nil || !success) {
+        [BPUtils printInfo:WARNING withString:@"Failed to move video from %@ to %@", self.videoFileName, newVideoFileName];
+    } else {
+        [BPUtils printInfo:INFO withString:@"Saved video at: %@", newVideoFileName];
+    }
 }
 
 - (void)stopVideoRecording:(BOOL)forced
@@ -316,6 +328,7 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
     [BPUtils printInfo:DEBUGINFO withString: @"BPTestBundleConnection_XCT_testCaseDidFinishForTestClass: %@, method: %@, withStatus: %@, duration: %@", testClass, method, statusString, duration];
     if ([self shouldRecordVideo]) {
         [self stopVideoRecording:NO];
+        [self tagVideoRecordingWithTestClass:testClass method:method];
         if ([statusString isEqual: @"passed"] && ![self.context.config keepPassingVideos]) {
             NSError *deleteError = nil;
             BOOL success = [NSFileManager.defaultManager removeItemAtPath:self.videoFileName error:&deleteError];
@@ -323,6 +336,7 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
                 [BPUtils printInfo:WARNING withString:@"Failed to delete video of successful run at path %@", self.videoFileName];
             }
         }
+        [self startVideoRecording];
     }
     return nil;
 }
@@ -338,14 +352,14 @@ static inline NSString* getVideoPath(NSString *directory, NSString *testClass, N
 
 - (id)_XCT_testCaseDidStartForTestClass:(NSString *)testClass method:(NSString *)method {
     [BPUtils printInfo:DEBUGINFO withString:@"BPTestBundleConnection_XCT_testCaseDidStartForTestClass: %@ and method: %@", testClass, method];
-    if ([self shouldRecordVideo]) {
-        [self startVideoRecordingForTestClass:testClass method:method];
-    }
     return nil;
 }
 
 - (id)_XCT_testSuite:(NSString *)tests didStartAt:(NSString *)time {
     [BPUtils printInfo:DEBUGINFO withString:@"BPTestBundleConnection_XCT_testSuite: %@, start %@", tests, time];
+    if ([self shouldRecordVideo]) {
+        [self startVideoRecording];
+    }
     return nil;
 }
 
